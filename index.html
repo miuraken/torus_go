@@ -527,8 +527,7 @@ SOFTWARE.
                 playerWhoseTurnItIs: currentPlayer, 
                 captured: JSON.parse(JSON.stringify(capturedStones)), 
                 ko: koPosition ? { ...koPosition } : null, 
-                scrollX: offsetX,
-                scrollY: offsetY
+                // scrollX and scrollY are NOT recorded to maintain current view on undo/redo
             };
             gameHistory.push(state);
             currentHistoryIndex = gameHistory.length - 1;
@@ -539,12 +538,11 @@ SOFTWARE.
             board = JSON.parse(JSON.stringify(state.board));
             currentPlayer = state.playerWhoseTurnItIs;
             capturedStones = JSON.parse(JSON.stringify(state.captured));
-            koPosition = state.ko ? { ...state.ko } : null;
-            offsetX = state.scrollX;
-            offsetY = state.scrollY;
+            koPosition = state.ko ? { ...state.ko } : null; 
+            // offsetX and offsetY are NOT restored to keep current view
 
             updateInfo();
-            drawBoard();
+            drawBoard(); 
             clearMessage();
             updateUndoRedoButtons();
         }
@@ -676,7 +674,6 @@ SOFTWARE.
                         ctx.lineTo(seamXPos, canvas.height);
                         ctx.stroke();
                     }
-                    break; 
                 }
             }
             
@@ -691,7 +688,6 @@ SOFTWARE.
                         ctx.lineTo(canvas.width, seamYPos);
                         ctx.stroke();
                     }
-                    break; 
                 }
             }
 
@@ -731,7 +727,6 @@ SOFTWARE.
         function drawStone(boardX, boardY, color) {
             const screenX = (boardX - offsetX + boardSize) % boardSize;
             const screenY = (boardY - offsetY + boardSize) % boardSize;
-
             ctx.beginPath();
             ctx.arc(
                 cellSize / 2 + screenX * cellSize, 
@@ -746,14 +741,20 @@ SOFTWARE.
             ctx.stroke();
         }
         
-        function processMove(x, y) {
+        /**
+         * Processes a valid move, updates the board, handles captures, Ko, and switches player.
+         * @param {number} x - Logical X coordinate of the move.
+         * @param {number} y - Logical Y coordinate of the move.
+         */
+        function processMove(x, y) { 
+            const boardStateBeforePlayerPlacedStone = JSON.stringify(board); 
+
             const playerWhoMadeTheMove = currentPlayer;
             board[y][x] = playerWhoMadeTheMove; 
 
             let capturedGroups = []; 
             const opponent = playerWhoMadeTheMove === BLACK ? WHITE : BLACK;
-            let boardStateBeforeThisSpecificCapture = JSON.stringify(board); 
-
+            
             const neighbors = getNeighbors(x, y);
             for (const n of neighbors) {
                 if (board[n.y][n.x] === opponent) {
@@ -777,12 +778,12 @@ SOFTWARE.
             if (capturedGroups.length > 0) {
                 for (const group of capturedGroups) {
                     totalStonesCapturedThisMove += group.stones.length;
-                    removeGroup(group.stones);
+                    removeGroup(group.stones); 
                 }
             }
             
-            const ownGroupAfterPlacement = getGroup(x, y); 
-            if (totalStonesCapturedThisMove === 0 && ownGroupAfterPlacement.liberties === 0) {
+            const ownGroupAfterPlacementAndCaptures = getGroup(x, y); 
+            if (totalStonesCapturedThisMove === 0 && ownGroupAfterPlacementAndCaptures.liberties === 0) {
                 board[y][x] = EMPTY; 
                 showMessage("errorUnexpected"); 
                 return; 
@@ -800,7 +801,7 @@ SOFTWARE.
                 const groupOfOriginalMoversStone = getGroup(x, y, tempBoardForKoCheck, playerWhoMadeTheMove);
                 if (groupOfOriginalMoversStone.stones.length === 1 && groupOfOriginalMoversStone.liberties === 0) {
                     tempBoardForKoCheck[y][x] = EMPTY; 
-                    if (JSON.stringify(tempBoardForKoCheck) === boardStateBeforeThisSpecificCapture) {
+                    if (JSON.stringify(tempBoardForKoCheck) === boardStateBeforePlayerPlacedStone) {
                         koPointForNextPlayerRestriction = { x: singleCapturedStonePos.x, y: singleCapturedStonePos.y };
                     }
                 }
@@ -856,6 +857,7 @@ SOFTWARE.
                 return false;
             }
 
+            // Check against Ko restriction set by the opponent's previous move
             if (koPosition && koPosition.x === x && koPosition.y === y) {
                 showMessage("errorKo"); 
                 return false;
@@ -975,10 +977,10 @@ SOFTWARE.
         canvas.addEventListener('keydown', (event) => {
             let scrolled = false; 
             switch (event.key) {
-                case 'ArrowUp': offsetY = (offsetY - 1 + boardSize) % boardSize; scrolled = true; break;
-                case 'ArrowDown': offsetY = (offsetY + 1) % boardSize; scrolled = true; break;
-                case 'ArrowLeft': offsetX = (offsetX - 1 + boardSize) % boardSize; scrolled = true; break;
-                case 'ArrowRight': offsetX = (offsetX + 1) % boardSize; scrolled = true; break;
+                case 'ArrowUp': offsetY = (offsetY + 1 + boardSize) % boardSize; scrolled = true; break; 
+                case 'ArrowDown': offsetY = (offsetY - 1) % boardSize; scrolled = true; break; 
+                case 'ArrowLeft': offsetX = (offsetX + 1 + boardSize) % boardSize; scrolled = true; break; 
+                case 'ArrowRight': offsetX = (offsetX - 1) % boardSize; scrolled = true; break; 
             }
             if (scrolled) {
                 event.preventDefault(); 
@@ -986,23 +988,23 @@ SOFTWARE.
             }
         });
 
-        scrollUpBtn.addEventListener('click', () => {
-            offsetY = (offsetY - 1 + boardSize) % boardSize; 
+        scrollUpBtn.addEventListener('click', () => { 
+            offsetY = (offsetY + 1 + boardSize) % boardSize; 
             drawBoard();
             canvas.focus(); 
         });
-        scrollDownBtn.addEventListener('click', () => {
-            offsetY = (offsetY + 1) % boardSize; 
+        scrollDownBtn.addEventListener('click', () => { 
+            offsetY = (offsetY - 1) % boardSize; 
             drawBoard();
             canvas.focus();
         });
-        scrollLeftBtn.addEventListener('click', () => {
-            offsetX = (offsetX - 1 + boardSize) % boardSize; 
+        scrollLeftBtn.addEventListener('click', () => { 
+            offsetX = (offsetX + 1 + boardSize) % boardSize; 
             drawBoard();
             canvas.focus();
         });
-        scrollRightBtn.addEventListener('click', () => {
-            offsetX = (offsetX + 1) % boardSize; 
+        scrollRightBtn.addEventListener('click', () => { 
+            offsetX = (offsetX - 1) % boardSize; 
             drawBoard();
             canvas.focus();
         });
