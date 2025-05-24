@@ -1,0 +1,970 @@
+<!--
+MIT License
+
+Copyright (c) [year] [copyright holders]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Torus Go</title> <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* General body styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align content to the top */
+            min-height: 100vh;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
+            overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
+            overflow: hidden; /* Prevent body scroll when canvas or other elements are focused */
+        }
+        /* Main container for the game */
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #ffffff; /* White background for the container */
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1); /* Soft shadow for depth */
+            width: 100%;
+            max-width: 800px; /* Max width for larger screens */
+        }
+
+        /* Controls for language selection - Radio button style */
+        .language-controls {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 15px; /* Increased gap for radio buttons */
+            justify-content: center;
+            align-items: center;
+        }
+        .language-controls label {
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .language-controls input[type="radio"] {
+            cursor: pointer;
+            margin-right: 3px;
+        }
+
+
+        /* Wrapper for the canvas and scroll buttons, using CSS Grid */
+        .canvas-area-wrapper {
+            display: grid;
+            grid-template-columns: auto 1fr auto; /* Col 1: Left btn, Col 2: Canvas, Col 3: Right btn */
+            grid-template-rows: auto 1fr auto;    /* Row 1: Top btn, Row 2: Canvas, Row 3: Bottom btn */
+            align-items: center; /* Vertically align items in their grid cells */
+            justify-items: center; /* Horizontally align items in their grid cells */
+            gap: 5px; /* Gap between grid items (buttons and canvas) */
+            width: 100%; /* Will be sized by JS to fit available space */
+            margin-bottom: 10px; 
+        }
+
+        /* Go board canvas styling */
+        canvas {
+            grid-column: 2 / 3; /* Place canvas in the center column */
+            grid-row: 2 / 3;    /* Place canvas in the center row */
+            background-color: #e6bf83; /* Traditional Go board color */
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: block; /* Remove extra space below canvas */
+            touch-action: none; /* Prevent default touch actions like pinch-zoom on the canvas */
+        }
+
+        /* General styling for scroll buttons */
+        .scroll-button {
+            font-size: 20px; 
+            background-color: #dddddd; /* Light gray background */
+            color: #333333;      /* Darker text color for contrast */
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+            user-select: none; /* Prevent text selection on buttons */
+        }
+        .scroll-button:hover {
+            background-color: #cccccc; /* Slightly darker on hover */
+        }
+
+        /* Specific styling for horizontal (left/right) scroll buttons */
+        #scrollLeftBtn, #scrollRightBtn {
+            width: 30px;       /* Explicit width, making them thin */
+            min-width: 30px;   /* Consistent with width */
+            padding-top: 8px;    /* Vertical padding for arrow centering */
+            padding-bottom: 8px; 
+            padding-left: 4px;   /* Reduced horizontal padding */
+            padding-right: 4px;  
+        }
+        #scrollLeftBtn  { grid-column: 1 / 2; grid-row: 2 / 3; align-self: stretch; } /* Stretch vertically to match canvas height */
+        #scrollRightBtn { grid-column: 3 / 4; grid-row: 2 / 3; align-self: stretch; } /* Stretch vertically */
+
+        /* Specific styling for vertical (up/down) scroll buttons */
+        #scrollUpBtn, #scrollDownBtn {
+            width: 100%; /* Make button width of the canvas column */
+            padding-top: 4px;    /* Reduced vertical padding */
+            padding-bottom: 4px; 
+            padding-left: 8px;   /* Keep horizontal padding for arrow centering */
+            padding-right: 8px;  
+            min-height: 30px;   /* Reduced min-height to make them thinner */
+            height: 30px;       /* Explicit height */
+        }
+        #scrollUpBtn    { grid-column: 2 / 3; grid-row: 1 / 2; } /* Place in top-center grid cell */
+        #scrollDownBtn  { grid-column: 2 / 3; grid-row: 3 / 4; } /* Place in bottom-center grid cell */
+
+        /* Controls for resetting the board (9x9, 13x13, 19x19) - Moved to bottom */
+        .board-size-controls {
+            margin-top: 15px; /* Add margin above these controls */
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            justify-content: center;
+        }
+        .board-size-controls button { /* Styling for reset buttons */
+            padding: 8px 12px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            background-color: #4a5568; /* Dark gray-blue */
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .board-size-controls button:hover {
+            background-color: #2d3748; /* Darker on hover */
+        }
+        .board-size-controls button.active { /* Style for the currently selected board size button */
+            background-color: #2c5282; /* A different active color */
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+
+        /* Panel for displaying game information (current player, captures) */
+        .info-panel {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 400px; /* Limit width of info panel */
+            margin-top: 10px; 
+            padding: 8px;
+            background-color: #edf2f7; /* Lighter gray-blue */
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .info-panel div {
+            color: #2d3748; /* Dark text color */
+        }
+
+        /* Area for displaying messages (errors, ko warnings) */
+        .message-area {
+            margin-top: 10px;
+            height: 20px; /* Fixed height to prevent layout shifts */
+            font-size: 14px;
+            color: #e53e3e; /* Red for error messages */
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* Text for game instructions */
+        .instructions {
+            margin-top:10px;
+            font-size: 12px;
+            color: #555; /* Medium gray text */
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="language-controls">
+            <label><input type="radio" name="language" value="en" id="langRadioEn"> EN</label>
+            <label><input type="radio" name="language" value="jp" id="langRadioJp"> JP</label>
+            <label><input type="radio" name="language" value="cn" id="langRadioCn"> CN</label>
+            <label><input type="radio" name="language" value="kr" id="langRadioKr"> KR</label>
+        </div>
+
+        <div id="canvasAreaWrapper" class="canvas-area-wrapper">
+            <div></div> <button id="scrollUpBtn" class="scroll-button">▲</button>
+            <div></div> <button id="scrollLeftBtn" class="scroll-button">◀</button>
+            <canvas id="goBoard" tabindex="0"></canvas> <button id="scrollRightBtn" class="scroll-button">▶</button>
+            <div></div> <button id="scrollDownBtn" class="scroll-button">▼</button>
+            <div></div> 
+        </div>
+        
+        <div class="info-panel">
+            <div id="currentPlayer">手番: 黒</div>
+            <div id="blackCaptured">黒のアゲハマ: 0</div>
+            <div id="whiteCaptured">白のアゲハマ: 0</div>
+        </div>
+        <div id="messageArea" class="message-area"></div>
+        <div id="instructionsText" class="instructions">矢印キーまたは盤面周りのボタンでスクロールできます。赤い線が盤面の境界です。</div>
+
+        <div class="board-size-controls">
+            <button id="reset9x9Btn">9x9</button>
+            <button id="reset13x13Btn">13x13</button>
+            <button id="reset19x19Btn">19x19</button>
+        </div>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const canvas = document.getElementById('goBoard');
+        const ctx = canvas.getContext('2d');
+        const currentPlayerDisplay = document.getElementById('currentPlayer');
+        const blackCapturedDisplay = document.getElementById('blackCaptured');
+        const whiteCapturedDisplay = document.getElementById('whiteCaptured');
+        const messageArea = document.getElementById('messageArea');
+        const canvasAreaWrapper = document.getElementById('canvasAreaWrapper');
+        const instructionsTextElement = document.getElementById('instructionsText');
+
+        // Scroll buttons
+        const scrollUpBtn = document.getElementById('scrollUpBtn');
+        const scrollDownBtn = document.getElementById('scrollDownBtn');
+        const scrollLeftBtn = document.getElementById('scrollLeftBtn');
+        const scrollRightBtn = document.getElementById('scrollRightBtn');
+
+        // Reset buttons
+        const reset9x9Btn = document.getElementById('reset9x9Btn');
+        const reset13x13Btn = document.getElementById('reset13x13Btn');
+        const reset19x19Btn = document.getElementById('reset19x19Btn');
+        const boardSizeButtons = [reset9x9Btn, reset13x13Btn, reset19x19Btn];
+
+        // Language radio buttons
+        const langRadioEn = document.getElementById('langRadioEn');
+        const langRadioJp = document.getElementById('langRadioJp');
+        const langRadioCn = document.getElementById('langRadioCn');
+        const langRadioKr = document.getElementById('langRadioKr');
+        const langRadios = [langRadioEn, langRadioJp, langRadioCn, langRadioKr];
+
+        // Game constants
+        const EMPTY = 0; 
+        const BLACK = 1; 
+        const WHITE = 2; 
+
+        // Game state variables
+        let boardSize = 9;       // Default board size changed to 9x9
+        let cellSize;             
+        let board;                
+        let currentPlayer = BLACK; 
+        let capturedStones = { [BLACK]: 0, [WHITE]: 0 }; 
+        let koPosition = null;    
+        let previousBoardStates = []; 
+
+        let offsetX = 0; 
+        let offsetY = 0; 
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const tapThreshold = 10; 
+
+        // Translations for different languages
+        const translations = {
+            en: {
+                title: "Torus Go Game",
+                currentPlayer: "Turn: ",
+                blackCaptured: "Black Captured: ",
+                whiteCaptured: "White Captured: ",
+                reset9x9: "9x9", 
+                reset13x13: "13x13",
+                reset19x19: "19x19",
+                errorStoneExists: "Stone already exists.",
+                errorSuicide: "Suicide. Cannot place stone.",
+                errorKo: "Ko. Cannot place stone.",
+                errorUnexpected: "Error: Suicide (unexpected).",
+                instructions: "Use arrow keys or buttons to scroll. Red lines are board edges.",
+                black: "Black",
+                white: "White",
+            },
+            jp: { 
+                title: "トーラス囲碁ゲーム",
+                currentPlayer: "手番: ",
+                blackCaptured: "黒のアゲハマ: ",
+                whiteCaptured: "白のアゲハマ: ",
+                reset9x9: "9路盤", 
+                reset13x13: "13路盤",
+                reset19x19: "19路盤",
+                errorStoneExists: "既に石があります。",
+                errorSuicide: "自殺手です。着手できません。",
+                errorKo: "コウです。着手できません。",
+                errorUnexpected: "エラー: 自殺手です (予期せぬ状況)",
+                instructions: "矢印キーまたは盤面周りのボタンでスクロールできます。赤い線が盤面の境界です。",
+                black: "黒",
+                white: "白",
+            },
+            cn: { 
+                title: "环形围棋游戏",
+                currentPlayer: "执子: ",
+                blackCaptured: "黑棋提子: ",
+                whiteCaptured: "白棋提子: ",
+                reset9x9: "9路",
+                reset13x13: "13路",
+                reset19x19: "19路",
+                errorStoneExists: "此处已有棋子。",
+                errorSuicide: "禁入点 (自杀)。",
+                errorKo: "劫争。不能下子。",
+                errorUnexpected: "错误：禁入点 (意外情况)。",
+                instructions: "使用箭头键或棋盘周围的按钮滚动。红线是棋盘边界。",
+                black: "黑棋",
+                white: "白棋",
+            },
+            kr: { 
+                title: "토러스 바둑 게임",
+                currentPlayer: "차례: ",
+                blackCaptured: "흑 잡은 돌: ",
+                whiteCaptured: "백 잡은 돌: ",
+                reset9x9: "9줄",
+                reset13x13: "13줄",
+                reset19x19: "19줄",
+                errorStoneExists: "이미 돌이 있습니다.",
+                errorSuicide: "자살수입니다. 둘 수 없습니다.",
+                errorKo: "패입니다. 둘 수 없습니다.",
+                errorUnexpected: "오류: 자살수 (예상치 못한 상황).",
+                instructions: "화살표 키나 보드 주변 버튼으로 스크롤하세요. 빨간 선은 보드 경계입니다.",
+                black: "흑",
+                white: "백",
+            }
+        };
+        let currentLanguage = 'jp'; // Default language
+
+        // --- Cookie Helper Functions ---
+        /**
+         * Sets a cookie.
+         * @param {string} name - Name of the cookie.
+         * @param {string} value - Value of the cookie.
+         * @param {number} days - Number of days until the cookie expires.
+         */
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "")  + expires + "; path=/; SameSite=Lax";
+        }
+
+        /**
+         * Gets a cookie value by name.
+         * @param {string} name - Name of the cookie.
+         * @returns {string|null} The cookie value or null if not found.
+         */
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for(let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        /**
+         * Loads the preferred language from cookie or defaults to Japanese.
+         */
+        function loadLanguagePreference() {
+            const savedLang = getCookie("goGameLanguage");
+            if (savedLang && translations[savedLang]) {
+                currentLanguage = savedLang;
+            } else {
+                currentLanguage = 'jp'; // Default to Japanese
+            }
+            // Set the radio button to reflect the loaded language
+            langRadios.forEach(radio => {
+                if (radio.value === currentLanguage) {
+                    radio.checked = true;
+                }
+            });
+        }
+
+
+        /**
+         * Updates all UI text elements based on the current selected language.
+         */
+        function updateUIText() {
+            const t = translations[currentLanguage]; 
+            document.title = t.title; 
+            
+            // Update text content of reset buttons based on current language
+            reset9x9Btn.textContent = t.reset9x9;
+            reset13x13Btn.textContent = t.reset13x13;
+            reset19x19Btn.textContent = t.reset19x19;
+            
+            instructionsTextElement.textContent = t.instructions;
+            
+            // Ensure the correct radio button is checked
+            langRadios.forEach(radio => {
+                radio.checked = (radio.value === currentLanguage);
+            });
+
+            updateInfo(); 
+        }
+
+        /**
+         * Sets the current game language, saves it to a cookie, and updates the UI.
+         * @param {string} lang - The language code (e.g., 'en', 'jp').
+         */
+        function setLanguage(lang) {
+            if (translations[lang]) { 
+                currentLanguage = lang;
+                setCookie("goGameLanguage", lang, 365); // Save language preference for 1 year
+                updateUIText();
+                clearMessage(); 
+            }
+        }
+
+        /**
+         * Calculates the available dimension for the canvas area wrapper.
+         * @returns {number} The calculated dimension (width/height) for the square wrapper.
+         */
+        function getAvailableGridDimension() { 
+            const gameContainer = document.querySelector('.game-container');
+            const langControlsElement = document.querySelector('.language-controls');
+            const boardSizeControlsElement = document.querySelector('.board-size-controls'); 
+            const infoPanelElement = document.querySelector('.info-panel');
+            const messageAreaElement = document.getElementById('messageArea');
+            const instructionsElement = document.getElementById('instructionsText');
+
+            const langControlsStyle = langControlsElement ? window.getComputedStyle(langControlsElement) : { marginTop: '0px', marginBottom: '0px', height: '0px' };
+            const boardSizeControlsStyle = boardSizeControlsElement ? window.getComputedStyle(boardSizeControlsElement) : { marginTop: '0px', marginBottom: '0px', height: '0px' };
+            const infoPanelStyle = infoPanelElement ? window.getComputedStyle(infoPanelElement) : { marginTop: '0px', marginBottom: '0px', height: '0px' };
+            const messageAreaStyle = messageAreaElement ? window.getComputedStyle(messageAreaElement) : { marginTop: '0px', marginBottom: '0px', height: '0px' };
+            const instructionsStyle = instructionsElement ? window.getComputedStyle(instructionsElement) : { marginTop: '0px', marginBottom: '0px', height: '0px' };
+            
+            const gameContainerStyle = window.getComputedStyle(gameContainer);
+            const bodyStyle = window.getComputedStyle(document.body);
+
+            const langControlsHeight = (langControlsElement ? langControlsElement.offsetHeight : 0) + parseFloat(langControlsStyle.marginTop) + parseFloat(langControlsStyle.marginBottom);
+            const boardSizeControlsHeight = (boardSizeControlsElement ? boardSizeControlsElement.offsetHeight : 0) + parseFloat(boardSizeControlsStyle.marginTop) + parseFloat(boardSizeControlsStyle.marginBottom);
+            const infoPanelHeight = (infoPanelElement ? infoPanelElement.offsetHeight : 0) + parseFloat(infoPanelStyle.marginTop) + parseFloat(infoPanelStyle.marginBottom);
+            const messageAreaHeight = (messageAreaElement ? messageAreaElement.offsetHeight : 0) + parseFloat(messageAreaStyle.marginTop) + parseFloat(messageAreaStyle.marginBottom);
+            const instructionsHeight = (instructionsElement ? instructionsElement.offsetHeight : 0) + parseFloat(instructionsStyle.marginTop) + parseFloat(instructionsStyle.marginBottom);
+            
+            const gameContainerVPadding = parseFloat(gameContainerStyle.paddingTop) + parseFloat(gameContainerStyle.paddingBottom);
+            const gameContainerHPadding = parseFloat(gameContainerStyle.paddingLeft) + parseFloat(gameContainerStyle.paddingRight);
+            const bodyVPadding = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
+
+            const availableHeightForWrapper = window.innerHeight - bodyVPadding - langControlsHeight - boardSizeControlsHeight - infoPanelHeight - messageAreaHeight - instructionsHeight - gameContainerVPadding - parseFloat(window.getComputedStyle(canvasAreaWrapper).marginBottom);
+            const availableWidthForWrapper = gameContainer.clientWidth - gameContainerHPadding;
+            
+            let targetDim = Math.min(availableWidthForWrapper, availableHeightForWrapper);
+            targetDim = Math.max(0, targetDim); 
+            
+            return targetDim > 0 ? targetDim : 300; 
+        }
+        
+        /**
+         * Initializes or re-initializes the game board.
+         */
+        function initBoard() {
+            const wrapperDim = getAvailableGridDimension(); 
+            canvasAreaWrapper.style.width = wrapperDim + 'px';
+            canvasAreaWrapper.style.height = wrapperDim + 'px';
+
+            const scrollButtonGap = 5; 
+            const horizontalButtonTotalWidth = (scrollLeftBtn.offsetWidth || 30) + (scrollRightBtn.offsetWidth || 30) + (2 * scrollButtonGap);
+            const verticalButtonTotalHeight = (scrollUpBtn.offsetHeight || 30) + (scrollDownBtn.offsetHeight || 30) + (2 * scrollButtonGap);
+
+            const canvasAvailableWidth = wrapperDim - horizontalButtonTotalWidth;
+            const canvasAvailableHeight = wrapperDim - verticalButtonTotalHeight;
+
+            let canvasDrawingSize = Math.min(canvasAvailableWidth, canvasAvailableHeight); 
+            canvasDrawingSize = Math.max(0, canvasDrawingSize); 
+
+            if (boardSize <= 0) boardSize = 9; // Default to 9 if invalid
+            
+            canvas.width = Math.floor(canvasDrawingSize / boardSize) * boardSize;
+            canvas.height = canvas.width; 
+
+            if (canvas.width < boardSize * 10 && boardSize > 0) { 
+                let fallbackCanvasSize = Math.min(
+                    wrapperDim - horizontalButtonTotalWidth, 
+                    wrapperDim - verticalButtonTotalHeight  
+                );
+                fallbackCanvasSize = Math.max(boardSize * 10, Math.floor(fallbackCanvasSize / boardSize) * boardSize);
+                canvas.width = fallbackCanvasSize;
+                canvas.height = fallbackCanvasSize;
+            }
+             if (canvas.width <= 0 && boardSize > 0) { 
+                canvas.width = boardSize * 10;
+                canvas.height = boardSize * 10;
+            }
+
+            cellSize = canvas.width / boardSize; 
+             if (cellSize === 0 && boardSize > 0) { 
+                cellSize = 10; 
+                canvas.width = cellSize * boardSize;
+                canvas.height = canvas.width;
+            }
+
+            board = Array(boardSize).fill(null).map(() => Array(boardSize).fill(EMPTY));
+            currentPlayer = BLACK;
+            capturedStones = { [BLACK]: 0, [WHITE]: 0 };
+            koPosition = null;
+            previousBoardStates = [];
+            offsetX = 0; 
+            offsetY = 0; 
+            
+            // Highlight active board size button
+            boardSizeButtons.forEach(btn => btn.classList.remove('active'));
+            if (boardSize === 9) reset9x9Btn.classList.add('active');
+            else if (boardSize === 13) reset13x13Btn.classList.add('active');
+            else if (boardSize === 19) reset19x19Btn.classList.add('active');
+
+            updateUIText(); 
+            drawBoard();    
+            clearMessage(); 
+        }
+
+        /**
+         * Draws the entire Go board.
+         */
+        function drawBoard() {
+            if (!ctx || !canvas || canvas.width === 0 || canvas.height === 0 || cellSize === 0) {
+                return; 
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            ctx.fillStyle = '#e6bf83'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height); 
+
+            for (let i = 0; i < boardSize; i++) { 
+                const logicalLineXIndex = (i + offsetX + boardSize) % boardSize; 
+                const isOriginalBoundaryX = logicalLineXIndex === 0; 
+                ctx.strokeStyle = isOriginalBoundaryX ? 'red' : '#333'; 
+                ctx.lineWidth = isOriginalBoundaryX ? Math.max(2, Math.floor(cellSize / 15)) : Math.max(1, Math.floor(cellSize / 25));
+                
+                const xPos = cellSize / 2 + i * cellSize; 
+                ctx.beginPath();
+                ctx.moveTo(xPos, cellSize / 2);
+                ctx.lineTo(xPos, canvas.height - cellSize / 2);
+                ctx.stroke();
+                
+                const logicalLineYIndex = (i + offsetY + boardSize) % boardSize; 
+                const isOriginalBoundaryY = logicalLineYIndex === 0; 
+                ctx.strokeStyle = isOriginalBoundaryY ? 'red' : '#333'; 
+                ctx.lineWidth = isOriginalBoundaryY ? Math.max(2, Math.floor(cellSize / 15)) : Math.max(1, Math.floor(cellSize / 25));
+
+                const yPos = cellSize / 2 + i * cellSize; 
+                ctx.beginPath();
+                ctx.moveTo(cellSize / 2, yPos);
+                ctx.lineTo(canvas.width - cellSize / 2, yPos);
+                ctx.stroke();
+            }
+
+            const starPointSize = Math.max(1, cellSize / 12); 
+            const starPoints = getStarPoints(boardSize); 
+            ctx.fillStyle = '#333'; 
+            starPoints.forEach(p_logical => {
+                const screenX = (p_logical.x - offsetX + boardSize) % boardSize;
+                const screenY = (p_logical.y - offsetY + boardSize) % boardSize;
+                ctx.beginPath();
+                ctx.arc(
+                    cellSize / 2 + screenX * cellSize, 
+                    cellSize / 2 + screenY * cellSize, 
+                    starPointSize, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+
+            for (let dispY = 0; dispY < boardSize; dispY++) { 
+                for (let dispX = 0; dispX < boardSize; dispX++) { 
+                    const boardX = (dispX + offsetX + boardSize) % boardSize;
+                    const boardY = (dispY + offsetY + boardSize) % boardSize;
+                    if (board[boardY][boardX] !== EMPTY) { 
+                        drawStone(boardX, boardY, board[boardY][boardX]); 
+                    }
+                }
+            }
+        }
+
+        /**
+         * Returns an array of star point coordinates for a given board size.
+         */
+        function getStarPoints(size) {
+            if (size === 9) return [{x:2,y:2},{x:6,y:2},{x:4,y:4},{x:2,y:6},{x:6,y:6}];
+            if (size === 13) return [{x:3,y:3},{x:9,y:3},{x:6,y:6},{x:3,y:9},{x:9,y:9}];
+            if (size === 19) return [{x:3,y:3},{x:9,y:3},{x:15,y:3},{x:3,y:9},{x:9,y:9},{x:15,y:9},{x:3,y:15},{x:9,y:15},{x:15,y:15}];
+            return []; 
+        }
+
+        /**
+         * Draws a single stone on the board.
+         */
+        function drawStone(boardX, boardY, color) {
+            const screenX = (boardX - offsetX + boardSize) % boardSize;
+            const screenY = (boardY - offsetY + boardSize) % boardSize;
+
+            ctx.beginPath();
+            ctx.arc(
+                cellSize / 2 + screenX * cellSize, 
+                cellSize / 2 + screenY * cellSize, 
+                cellSize / 2 * 0.9, 
+                0, 2 * Math.PI 
+            );
+            ctx.fillStyle = color === BLACK ? '#1a202c' : '#ffffff'; 
+            ctx.fill();
+            ctx.strokeStyle = color === BLACK ? '#000000' : '#cccccc'; 
+            ctx.lineWidth = Math.max(0.5, Math.floor(cellSize / 50)); 
+            ctx.stroke();
+        }
+
+        /**
+         * Handles user interaction (click or tap) on the canvas to place a stone.
+         */
+        function handleInteraction(event) {
+            if (cellSize === 0) return; 
+
+            const rect = canvas.getBoundingClientRect(); 
+            let clickXOnCanvas, clickYOnCanvas;
+
+            if (event.type.startsWith('touch')) {
+                if (event.touches.length === 0 && event.changedTouches.length === 0) return; 
+                 const touch = event.touches[0] || event.changedTouches[0]; 
+                clickXOnCanvas = touch.clientX - rect.left;
+                clickYOnCanvas = touch.clientY - rect.top;
+            } else { 
+                clickXOnCanvas = event.clientX - rect.left;
+                clickYOnCanvas = event.clientY - rect.top;
+            }
+            
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const logicalClickX = clickXOnCanvas * scaleX; 
+            const logicalClickY = clickYOnCanvas * scaleY; 
+
+            const screenCellX = Math.floor(logicalClickX / cellSize);
+            const screenCellY = Math.floor(logicalClickY / cellSize);
+
+            const x = (screenCellX + offsetX + boardSize) % boardSize;
+            const y = (screenCellY + offsetY + boardSize) % boardSize;
+
+            if (x < 0 || x >= boardSize || y < 0 || y >= boardSize) return; 
+            if (!isValidMove(x, y, currentPlayer)) return; 
+            
+            const boardStateBeforeMove = JSON.stringify(board);
+            previousBoardStates.push(boardStateBeforeMove);
+            if (previousBoardStates.length > 3) previousBoardStates.shift(); 
+
+            board[y][x] = currentPlayer; 
+            let capturedInThisMove = 0;
+            const opponent = currentPlayer === BLACK ? WHITE : BLACK;
+
+            const neighbors = getNeighbors(x, y); 
+            for (const n of neighbors) {
+                if (board[n.y][n.x] === opponent) { 
+                    const group = getGroup(n.x, n.y); 
+                    if (group.liberties === 0) { 
+                        capturedInThisMove += group.stones.length;
+                        removeGroup(group.stones); 
+                    }
+                }
+            }
+            
+            if (capturedInThisMove === 0) { 
+                const ownGroup = getGroup(x, y); 
+                if (ownGroup.liberties === 0) {
+                    board[y][x] = EMPTY; 
+                    previousBoardStates.pop(); 
+                    showMessage("errorUnexpected"); 
+                    return;
+                }
+            }
+
+            capturedStones[currentPlayer] += capturedInThisMove; 
+            
+            if (capturedInThisMove === 1) {
+                 const newBoardString = JSON.stringify(board);
+                 if (previousBoardStates.length >= 2 && newBoardString === previousBoardStates[previousBoardStates.length - 2]) {
+                    koPosition = {x, y}; 
+                 } else {
+                    koPosition = null; 
+                 }
+            } else {
+                koPosition = null; 
+            }
+
+            currentPlayer = opponent; 
+            updateInfo();    
+            drawBoard();     
+            clearMessage();  
+        }
+
+        /**
+         * Checks if a move is valid.
+         */
+        function isValidMove(x, y, player) {
+            if (board[y][x] !== EMPTY) { 
+                showMessage("errorStoneExists"); 
+                return false;
+            }
+
+            if (koPosition && koPosition.x === x && koPosition.y === y) {
+                const boardCopy = JSON.parse(JSON.stringify(board)); 
+                boardCopy[y][x] = player; 
+                let tempCapturedCount = 0;
+                const opponentPlayer = player === BLACK ? WHITE : BLACK;
+                
+                const nCoords = getNeighbors(x,y); 
+                for (const nc of nCoords) {
+                    if (boardCopy[nc.y][nc.x] === opponentPlayer) { 
+                        const groupData = getGroup(nc.x, nc.y, boardCopy, opponentPlayer); 
+                        if (groupData.liberties === 0) { 
+                            tempCapturedCount += groupData.stones.length;
+                            groupData.stones.forEach(s => boardCopy[s.y][s.x] = EMPTY);
+                        }
+                    }
+                }
+
+                if (tempCapturedCount === 1) {
+                    const resultingBoardString = JSON.stringify(boardCopy);
+                    if (previousBoardStates.length > 0 && resultingBoardString === previousBoardStates[previousBoardStates.length - 1]) {
+                        showMessage("errorKo"); 
+                        return false;
+                    }
+                }
+            }
+
+            const tempBoardForSuicideCheck = board.map(row => [...row]); 
+            tempBoardForSuicideCheck[y][x] = player; 
+            
+            let capturesOpponent = false; 
+            const opponent = player === BLACK ? WHITE : BLACK;
+            const neighbors = getNeighbors(x, y); 
+
+            for (const n of neighbors) {
+                if (tempBoardForSuicideCheck[n.y][n.x] === opponent) {
+                    const opponentGroup = getGroup(n.x, n.y, tempBoardForSuicideCheck, opponent);
+                    if (opponentGroup.liberties === 0) {
+                        capturesOpponent = true; 
+                        break;
+                    }
+                }
+            }
+            
+            const ownGroup = getGroup(x, y, tempBoardForSuicideCheck, player);
+            if (ownGroup.liberties === 0 && !capturesOpponent) { 
+                showMessage("errorSuicide"); 
+                return false; 
+            }
+
+            clearMessage(); 
+            return true; 
+        }
+
+        /**
+         * Finds a group of connected stones and its liberties.
+         */
+        function getGroup(startX, startY, currentBoard = board, stoneColor = null) {
+            const colorToFind = stoneColor !== null ? stoneColor : currentBoard[startY][startX];
+            if (colorToFind === EMPTY) return { stones: [], liberties: 0, color: EMPTY }; 
+
+            const q = [{x: startX, y: startY}]; 
+            const groupStones = []; 
+            const libertyCoords = new Set(); 
+            const visited = Array(boardSize).fill(null).map(() => Array(boardSize).fill(false)); 
+            
+            if(startY < 0 || startY >= boardSize || startX < 0 || startX >= boardSize || currentBoard[startY][startX] !== colorToFind) {
+                return { stones: [], liberties: 0, color: colorToFind }; 
+            }
+            visited[startY][startX] = true;
+
+            while (q.length > 0) {
+                const {x, y} = q.shift(); 
+                groupStones.push({x, y});
+
+                const neighbors = getNeighbors(x, y); 
+                for (const n of neighbors) {
+                    if (currentBoard[n.y][n.x] === EMPTY) { 
+                        libertyCoords.add(`${n.x},${n.y}`); 
+                    } else if (currentBoard[n.y][n.x] === colorToFind && !visited[n.y][n.x]) { 
+                        visited[n.y][n.x] = true;
+                        q.push(n); 
+                    }
+                }
+            }
+            return { stones: groupStones, liberties: libertyCoords.size, color: colorToFind };
+        }
+        
+        /**
+         * Removes a group of stones from the board.
+         */
+        function removeGroup(stones) { 
+            stones.forEach(s => {
+                board[s.y][s.x] = EMPTY; 
+            });
+        }
+
+        /**
+         * Gets the logical coordinates of the neighbors of a given intersection on the torus board.
+         */
+        function getNeighbors(x, y) { 
+            const neighbors = [];
+            neighbors.push({x: (x - 1 + boardSize) % boardSize, y: y}); 
+            neighbors.push({x: (x + 1) % boardSize, y: y});             
+            neighbors.push({x: x, y: (y - 1 + boardSize) % boardSize}); 
+            neighbors.push({x: x, y: (y + 1) % boardSize});             
+            return neighbors;
+        }
+
+        /**
+         * Updates the game information display.
+         */
+        function updateInfo() {
+            const t = translations[currentLanguage]; 
+            currentPlayerDisplay.textContent = t.currentPlayer + (currentPlayer === BLACK ? t.black : t.white);
+            blackCapturedDisplay.textContent = t.blackCaptured + capturedStones[BLACK];
+            whiteCapturedDisplay.textContent = t.whiteCaptured + capturedStones[WHITE];
+        }
+        
+        /**
+         * Displays a message in the message area.
+         */
+        function showMessage(messageKey) { 
+            const t = translations[currentLanguage];
+            messageArea.textContent = t[messageKey] || messageKey; 
+        }
+
+        /**
+         * Clears any message from the message area.
+         */
+        function clearMessage() {
+            messageArea.textContent = "";
+        }
+
+        /**
+         * Resets the game to a new board size.
+         */
+        function resetBoard(newSize) { // Renamed to avoid conflict with window.resetGame if any
+            boardSize = newSize;
+            initBoard(); 
+        };
+        
+        // --- Event Listeners Setup ---
+
+        // Setup for reset buttons
+        reset9x9Btn.onclick = () => resetBoard(9);
+        reset13x13Btn.onclick = () => resetBoard(13);
+        reset19x19Btn.onclick = () => resetBoard(19);
+
+        // Setup for language radio buttons
+        langRadios.forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                setLanguage(event.target.value);
+            });
+        });
+
+
+        // Keyboard controls for scrolling the board
+        canvas.addEventListener('keydown', (event) => {
+            let scrolled = false; 
+            switch (event.key) {
+                case 'ArrowUp': offsetY = (offsetY - 1 + boardSize) % boardSize; scrolled = true; break;
+                case 'ArrowDown': offsetY = (offsetY + 1) % boardSize; scrolled = true; break;
+                case 'ArrowLeft': offsetX = (offsetX - 1 + boardSize) % boardSize; scrolled = true; break;
+                case 'ArrowRight': offsetX = (offsetX + 1) % boardSize; scrolled = true; break;
+            }
+            if (scrolled) {
+                event.preventDefault(); 
+                drawBoard(); 
+            }
+        });
+
+        // Scroll button controls
+        scrollUpBtn.addEventListener('click', () => {
+            offsetY = (offsetY - 1 + boardSize) % boardSize; 
+            drawBoard();
+            canvas.focus(); 
+        });
+        scrollDownBtn.addEventListener('click', () => {
+            offsetY = (offsetY + 1) % boardSize; 
+            drawBoard();
+            canvas.focus();
+        });
+        scrollLeftBtn.addEventListener('click', () => {
+            offsetX = (offsetX - 1 + boardSize) % boardSize; 
+            drawBoard();
+            canvas.focus();
+        });
+        scrollRightBtn.addEventListener('click', () => {
+            offsetX = (offsetX + 1) % boardSize; 
+            drawBoard();
+            canvas.focus();
+        });
+
+        // Mouse click listener for placing stones
+        canvas.addEventListener('click', handleInteraction); 
+
+        // Touch listeners for placing stones (tap detection)
+        let tapTimeout = null; 
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) { 
+                touchStartX = e.touches[0].clientX; 
+                touchStartY = e.touches[0].clientY;
+                tapTimeout = setTimeout(() => { 
+                    tapTimeout = null; 
+                }, 200); 
+            }
+        }, { passive: true }); 
+
+        canvas.addEventListener('touchend', (e) => {
+            if (tapTimeout) { 
+                clearTimeout(tapTimeout); 
+                tapTimeout = null;
+                const touchEndX = e.changedTouches[0].clientX; 
+                const touchEndY = e.changedTouches[0].clientY;
+                const deltaX = Math.abs(touchEndX - touchStartX); 
+                const deltaY = Math.abs(touchEndY - touchStartY);
+                if (deltaX < tapThreshold && deltaY < tapThreshold) { 
+                    handleInteraction(e); 
+                }
+            }
+        }, { passive: true });
+
+
+        // Resize listener to re-initialize the board if window size changes
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout); 
+            resizeTimeout = setTimeout(initBoard, 250); 
+        });
+        
+        // --- Initial Game Setup ---
+        loadLanguagePreference(); // Load saved language or default
+        initBoard(); // Initialize the game when the script loads
+        canvas.focus(); // Focus the canvas to enable keyboard controls immediately
+    </script>
+</body>
+</html>
