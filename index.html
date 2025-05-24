@@ -282,7 +282,7 @@ SOFTWARE.
 
     <script>
         // Get DOM elements
-        const mainTitleElement = document.getElementById('mainTitle'); // Get main title element
+        const mainTitleElement = document.getElementById('mainTitle'); 
         const canvas = document.getElementById('goBoard');
         const ctx = canvas.getContext('2d');
         const currentPlayerDisplay = document.getElementById('currentPlayer');
@@ -336,8 +336,8 @@ SOFTWARE.
 
         const translations = {
             en: {
-                title: "Torus Go Board", // Updated title
-                mainTitle: "Torus Go Board", // Added main title for UI display
+                title: "Torus Go Board", 
+                mainTitle: "Torus Go Board", 
                 currentPlayer: "Turn: ",
                 blackCaptured: "Black Captured: ",
                 whiteCaptured: "White Captured: ",
@@ -348,15 +348,15 @@ SOFTWARE.
                 errorSuicide: "Suicide. Cannot place stone.",
                 errorKo: "Ko. Cannot place stone.",
                 errorUnexpected: "Error: Suicide (unexpected).",
-                instructions: "Use arrow keys or buttons to scroll. Red lines are board edges.",
+                instructions: "Use arrow keys or buttons to scroll. Boundary lines are subtly marked.",
                 black: "Black",
                 white: "White",
                 undo: "Undo",
                 redo: "Redo",
             },
             jp: { 
-                title: "トーラス碁盤", // Updated title
-                mainTitle: "トーラス碁盤", // Added main title for UI display
+                title: "トーラス碁盤", 
+                mainTitle: "トーラス碁盤", 
                 currentPlayer: "手番: ",
                 blackCaptured: "黒のアゲハマ: ",
                 whiteCaptured: "白のアゲハマ: ",
@@ -367,15 +367,15 @@ SOFTWARE.
                 errorSuicide: "自殺手です。着手できません。",
                 errorKo: "コウです。着手できません。",
                 errorUnexpected: "エラー: 自殺手です (予期せぬ状況)",
-                instructions: "矢印キーまたは盤面周りのボタンでスクロールできます。赤い線が盤面の境界です。",
+                instructions: "矢印キーまたは盤面周りのボタンでスクロールできます。境界線は薄く表示されます。",
                 black: "黒",
                 white: "白",
                 undo: "戻る",
                 redo: "進む",
             },
             cn: { 
-                title: "环形棋盘", // Updated title (棋盘 = board)
-                mainTitle: "环形棋盘", // Added main title for UI display
+                title: "环形棋盘", 
+                mainTitle: "环形棋盘", 
                 currentPlayer: "执子: ",
                 blackCaptured: "黑棋提子: ",
                 whiteCaptured: "白棋提子: ",
@@ -386,15 +386,15 @@ SOFTWARE.
                 errorSuicide: "禁入点 (自杀)。",
                 errorKo: "劫争。不能下子。",
                 errorUnexpected: "错误：禁入点 (意外情况)。",
-                instructions: "使用箭头键或棋盘周围的按钮滚动。红线是棋盘边界。",
+                instructions: "使用箭头键或棋盘周围的按钮滚动。边界线会以浅色标记。",
                 black: "黑棋",
                 white: "白棋",
                 undo: "悔棋", 
                 redo: "重做", 
             },
             kr: { 
-                title: "토러스 바둑판", // Updated title (바둑판 = board)
-                mainTitle: "토러스 바둑판", // Added main title for UI display
+                title: "토러스 바둑판", 
+                mainTitle: "토러스 바둑판", 
                 currentPlayer: "차례: ",
                 blackCaptured: "흑 잡은 돌: ",
                 whiteCaptured: "백 잡은 돌: ",
@@ -405,7 +405,7 @@ SOFTWARE.
                 errorSuicide: "자살수입니다. 둘 수 없습니다.",
                 errorKo: "패입니다. 둘 수 없습니다.",
                 errorUnexpected: "오류: 자살수 (예상치 못한 상황).",
-                instructions: "화살표 키나 보드 주변 버튼으로 스크롤하세요. 빨간 선은 보드 경계입니다.",
+                instructions: "화살표 키나 보드 주변 버튼으로 스크롤하세요. 경계선은 옅은 색으로 표시됩니다.",
                 black: "흑",
                 white: "백",
                 undo: "무르기",
@@ -452,7 +452,7 @@ SOFTWARE.
         function updateUIText() {
             const t = translations[currentLanguage]; 
             document.title = t.title; 
-            mainTitleElement.textContent = t.mainTitle; // Update main title in UI
+            mainTitleElement.textContent = t.mainTitle; 
             
             reset9x9Btn.textContent = t.reset9x9;
             reset13x13Btn.textContent = t.reset13x13;
@@ -480,7 +480,7 @@ SOFTWARE.
 
         function getAvailableGridDimension() { 
             const gameContainer = document.querySelector('.game-container');
-            const mainTitleElem = document.getElementById('mainTitle'); // Get main title for height calc
+            const mainTitleElem = document.getElementById('mainTitle'); 
             const topControlsWrapper = document.querySelector('.top-controls-wrapper');
             const boardSizeControlsElement = document.querySelector('.board-size-controls'); 
             const infoPanelElement = document.querySelector('.info-panel');
@@ -639,29 +639,62 @@ SOFTWARE.
             ctx.fillStyle = '#e6bf83'; 
             ctx.fillRect(0, 0, canvas.width, canvas.height); 
 
+            const boundaryColor = '#ffffffbb'; 
+            const boundaryLineWidth = Math.max(1, Math.floor(cellSize / 18)); 
+            const normalLineColor = '#333';
+            const normalLineWidth = Math.max(1, Math.floor(cellSize / 25));
+
+            // Draw normal grid lines first
+            ctx.strokeStyle = normalLineColor;
+            ctx.lineWidth = normalLineWidth;
             for (let i = 0; i < boardSize; i++) { 
-                const logicalLineXIndex = (i + offsetX + boardSize) % boardSize; 
-                const isOriginalBoundaryX = logicalLineXIndex === 0; 
-                ctx.strokeStyle = isOriginalBoundaryX ? 'red' : '#333'; 
-                ctx.lineWidth = isOriginalBoundaryX ? Math.max(2, Math.floor(cellSize / 15)) : Math.max(1, Math.floor(cellSize / 25));
-                
                 const xPos = cellSize / 2 + i * cellSize; 
                 ctx.beginPath();
                 ctx.moveTo(xPos, cellSize / 2);
                 ctx.lineTo(xPos, canvas.height - cellSize / 2);
                 ctx.stroke();
                 
-                const logicalLineYIndex = (i + offsetY + boardSize) % boardSize; 
-                const isOriginalBoundaryY = logicalLineYIndex === 0; 
-                ctx.strokeStyle = isOriginalBoundaryY ? 'red' : '#333'; 
-                ctx.lineWidth = isOriginalBoundaryY ? Math.max(2, Math.floor(cellSize / 15)) : Math.max(1, Math.floor(cellSize / 25));
-
                 const yPos = cellSize / 2 + i * cellSize; 
                 ctx.beginPath();
                 ctx.moveTo(cellSize / 2, yPos);
                 ctx.lineTo(canvas.width - cellSize / 2, yPos);
                 ctx.stroke();
             }
+
+            // Draw boundary "seam" lines using the user-provided logic
+            ctx.strokeStyle = boundaryColor;
+            ctx.lineWidth = boundaryLineWidth;
+
+            // Check if the vertical seam is visible
+            for (let screenCol = 0; screenCol < boardSize; screenCol++) {
+                const logicalCol = (screenCol + offsetX + boardSize) % boardSize;
+                if (logicalCol === (boardSize - 1)) {
+                    const seamXPos = cellSize / 2 + screenCol * cellSize + cellSize / 2; 
+                    if (seamXPos > 0 && seamXPos < canvas.width) { 
+                        ctx.beginPath();
+                        ctx.moveTo(seamXPos, 0); 
+                        ctx.lineTo(seamXPos, canvas.height);
+                        ctx.stroke();
+                    }
+                    break; 
+                }
+            }
+            
+            // Check if the horizontal seam is visible
+            for (let screenRow = 0; screenRow < boardSize; screenRow++) {
+                const logicalRow = (screenRow + offsetY + boardSize) % boardSize;
+                if (logicalRow === (boardSize - 1)) {
+                    const seamYPos = cellSize / 2 + screenRow * cellSize + cellSize / 2; 
+                     if (seamYPos > 0 && seamYPos < canvas.height) { 
+                        ctx.beginPath();
+                        ctx.moveTo(0, seamYPos); 
+                        ctx.lineTo(canvas.width, seamYPos);
+                        ctx.stroke();
+                    }
+                    break; 
+                }
+            }
+
 
             const starPointSize = Math.max(1, cellSize / 12); 
             const starPoints = getStarPoints(boardSize); 
@@ -719,7 +752,7 @@ SOFTWARE.
 
             let capturedGroups = []; 
             const opponent = playerWhoMadeTheMove === BLACK ? WHITE : BLACK;
-            let boardStateBeforeThisSpecificCapture = JSON.stringify(board); // State before any captures by this move
+            let boardStateBeforeThisSpecificCapture = JSON.stringify(board); 
 
             const neighbors = getNeighbors(x, y);
             for (const n of neighbors) {
