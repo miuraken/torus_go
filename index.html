@@ -29,6 +29,13 @@ SOFTWARE.
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5GM1ZYX7HF"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-5GM1ZYX7HF');
+    </script>
     <style>
         /* General body styling */
         body {
@@ -462,6 +469,17 @@ SOFTWARE.
         const rotationSpeed = 0.02;
         let animationFrameId3D; 
 
+        /**
+         * Tracks a custom event with Google Analytics 4.
+         * @param {string} eventName - The name of the event.
+         * @param {object} eventParams - Parameters for the event.
+         */
+        function trackGAEvent(eventName, eventParams) {
+            if (typeof gtag === 'function') {
+                gtag('event', eventName, eventParams);
+            }
+        }
+
 
         const translations = {
             en: {
@@ -625,6 +643,7 @@ SOFTWARE.
                 setCookie("goGameLanguage", lang, 365); 
                 updateUIText();
                 clearMessage(); 
+                trackGAEvent('change_language', { language_code: lang });
             }
         }
 
@@ -711,6 +730,7 @@ SOFTWARE.
             if (currentHistoryIndex > 0) {
                 currentHistoryIndex--;
                 loadStateFromHistory(gameHistory[currentHistoryIndex], true); 
+                trackGAEvent('undo_move', { move_number: currentHistoryIndex + 1 });
             }
         }
 
@@ -718,6 +738,7 @@ SOFTWARE.
             if (currentHistoryIndex < gameHistory.length - 1) {
                 currentHistoryIndex++;
                 loadStateFromHistory(gameHistory[currentHistoryIndex], true); 
+                trackGAEvent('redo_move', { move_number: currentHistoryIndex + 1 });
             }
         }
 
@@ -744,6 +765,7 @@ SOFTWARE.
             setup3DTorusAndBoard(); 
             if(renderer3D && !animationFrameId3D) animate3D(); 
             document.addEventListener('keydown', handle3DKeyDown); 
+            trackGAEvent('view_3d_board', { board_size: boardSize });
         }
 
         function close3DModal() {
@@ -915,6 +937,7 @@ SOFTWARE.
             }
             if (scrolled3D) {
                 event.preventDefault();
+                trackGAEvent('scroll_3d_board', { direction: event.key.replace('Arrow','').toLowerCase() });
             }
         }
 
@@ -1153,6 +1176,13 @@ SOFTWARE.
             updateInfo();    
             drawBoard();     
             clearMessage();  
+             trackGAEvent('place_stone', { 
+                player: playerWhoMadeTheMove === BLACK ? 'black' : 'white',
+                x_coord: x,
+                y_coord: y,
+                board_size: boardSize,
+                captured_stones: totalStonesCapturedThisMove
+            });
         }
 
         function handleInteraction(event) {
@@ -1299,10 +1329,12 @@ SOFTWARE.
                 showResetConfirmModal(() => { 
                     boardSize = newSize;
                     initBoard(); 
+                    trackGAEvent('reset_board', { new_size: newSize });
                 });
             } else { 
                 boardSize = newSize;
                 initBoard();
+                trackGAEvent('reset_board', { new_size: newSize });
             }
         };
         
@@ -1347,15 +1379,17 @@ SOFTWARE.
 
         canvas.addEventListener('keydown', (event) => {
             let scrolled = false; 
+            let direction = '';
             switch (event.key) {
-                case 'ArrowUp': offsetY = (offsetY - 1 + boardSize) % boardSize; scrolled = true; break; 
-                case 'ArrowDown': offsetY = (offsetY + 1) % boardSize; scrolled = true; break; 
-                case 'ArrowLeft': offsetX = (offsetX - 1 + boardSize) % boardSize; scrolled = true; break; 
-                case 'ArrowRight': offsetX = (offsetX + 1) % boardSize; scrolled = true; break; 
+                case 'ArrowUp': offsetY = (offsetY - 1 + boardSize) % boardSize; scrolled = true; direction = 'up'; break; 
+                case 'ArrowDown': offsetY = (offsetY + 1) % boardSize; scrolled = true; direction = 'down'; break; 
+                case 'ArrowLeft': offsetX = (offsetX - 1 + boardSize) % boardSize; scrolled = true; direction = 'left'; break; 
+                case 'ArrowRight': offsetX = (offsetX + 1) % boardSize; scrolled = true; direction = 'right'; break; 
             }
             if (scrolled) {
                 event.preventDefault(); 
                 drawBoard(); 
+                trackGAEvent('scroll_2d_board_key', { direction: direction });
             }
         });
 
@@ -1363,21 +1397,25 @@ SOFTWARE.
             offsetY = (offsetY - 1 + boardSize) % boardSize; 
             drawBoard();
             canvas.focus(); 
+            trackGAEvent('scroll_2d_board_button', { direction: 'up' });
         });
         scrollDownBtn.addEventListener('click', () => { 
             offsetY = (offsetY + 1) % boardSize; 
             drawBoard();
             canvas.focus();
+            trackGAEvent('scroll_2d_board_button', { direction: 'down' });
         });
         scrollLeftBtn.addEventListener('click', () => { 
             offsetX = (offsetX - 1 + boardSize) % boardSize; 
             drawBoard();
             canvas.focus();
+            trackGAEvent('scroll_2d_board_button', { direction: 'left' });
         });
         scrollRightBtn.addEventListener('click', () => { 
             offsetX = (offsetX + 1) % boardSize; 
             drawBoard();
             canvas.focus();
+            trackGAEvent('scroll_2d_board_button', { direction: 'right' });
         });
 
         canvas.addEventListener('click', handleInteraction); 
