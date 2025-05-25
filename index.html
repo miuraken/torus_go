@@ -1,7 +1,7 @@
 <!--
 MIT License
 
-Copyright (c) [year] [copyright holders]
+Copyright (c) 2025 miuraken
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -240,11 +240,71 @@ SOFTWARE.
             color: #555; 
             text-align: center;
         }
+
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* Ensure it's on top */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        .modal-content p {
+            margin-bottom: 20px;
+            font-size: 16px;
+            color: #333;
+        }
+        .modal-buttons button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 6px;
+            border: none;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #modalConfirmBtn {
+            background-color: #e53e3e; /* Red */
+            color: white;
+        }
+        #modalConfirmBtn:hover {
+            background-color: #c53030; /* Darker Red */
+        }
+        #modalCancelBtn {
+            background-color: #cbd5e0; /* Gray */
+            color: #2d3748;
+        }
+        #modalCancelBtn:hover {
+            background-color: #a0aec0; /* Darker Gray */
+        }
+
     </style>
 </head>
 <body>
     <div class="game-container">
-        <h1 id="mainTitle">トーラス碁盤</h1> <div class="top-controls-wrapper">
+        <h1 id="mainTitle">トーラス碁盤</h1> 
+        <div class="top-controls-wrapper">
             <div class="language-controls">
                 <label><input type="radio" name="language" value="en" id="langRadioEn"> EN</label>
                 <label><input type="radio" name="language" value="jp" id="langRadioJp"> JP</label>
@@ -280,6 +340,16 @@ SOFTWARE.
         </div>
     </div>
 
+    <div id="resetConfirmModal" class="modal-overlay">
+        <div class="modal-content">
+            <p id="resetConfirmMessage">現在の盤面をリセットしますか？</p>
+            <div class="modal-buttons">
+                <button id="modalConfirmBtn">はい</button>
+                <button id="modalCancelBtn">いいえ</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Get DOM elements
         const mainTitleElement = document.getElementById('mainTitle'); 
@@ -310,6 +380,13 @@ SOFTWARE.
 
         const undoBtn = document.getElementById('undoBtn');
         const redoBtn = document.getElementById('redoBtn');
+
+        // Modal elements
+        const resetConfirmModal = document.getElementById('resetConfirmModal');
+        const resetConfirmMessage = document.getElementById('resetConfirmMessage');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+        const modalCancelBtn = document.getElementById('modalCancelBtn');
+        let confirmCallback = null; // To store the action to perform on confirm
 
         // Game constants
         const EMPTY = 0; 
@@ -353,6 +430,9 @@ SOFTWARE.
                 white: "White",
                 undo: "Undo",
                 redo: "Redo",
+                confirmReset: "Reset the current board?",
+                yes: "Yes",
+                no: "No",
             },
             jp: { 
                 title: "トーラス碁盤", 
@@ -372,6 +452,9 @@ SOFTWARE.
                 white: "白",
                 undo: "戻る",
                 redo: "進む",
+                confirmReset: "現在の盤面をリセットしますか？",
+                yes: "はい",
+                no: "いいえ",
             },
             cn: { 
                 title: "环形棋盘", 
@@ -391,6 +474,9 @@ SOFTWARE.
                 white: "白棋",
                 undo: "悔棋", 
                 redo: "重做", 
+                confirmReset: "要重置当前棋盘吗？",
+                yes: "是",
+                no: "否",
             },
             kr: { 
                 title: "토러스 바둑판", 
@@ -410,6 +496,9 @@ SOFTWARE.
                 white: "백",
                 undo: "무르기",
                 redo: "다시 실행",
+                confirmReset: "현재 바둑판을 초기화하시겠습니까?",
+                yes: "예",
+                no: "아니오",
             }
         };
         let currentLanguage = 'jp'; 
@@ -461,6 +550,10 @@ SOFTWARE.
             instructionsTextElement.textContent = t.instructions;
             undoBtn.textContent = t.undo;
             redoBtn.textContent = t.redo;
+
+            resetConfirmMessage.textContent = t.confirmReset;
+            modalConfirmBtn.textContent = t.yes;
+            modalCancelBtn.textContent = t.no;
             
             langRadios.forEach(radio => {
                 radio.checked = (radio.value === currentLanguage);
@@ -527,7 +620,6 @@ SOFTWARE.
                 playerWhoseTurnItIs: currentPlayer, 
                 captured: JSON.parse(JSON.stringify(capturedStones)), 
                 ko: koPosition ? { ...koPosition } : null, 
-                // scrollX and scrollY are NOT recorded to maintain current view on undo/redo
             };
             gameHistory.push(state);
             currentHistoryIndex = gameHistory.length - 1;
@@ -539,7 +631,6 @@ SOFTWARE.
             currentPlayer = state.playerWhoseTurnItIs;
             capturedStones = JSON.parse(JSON.stringify(state.captured));
             koPosition = state.ko ? { ...state.ko } : null; 
-            // offsetX and offsetY are NOT restored to keep current view
 
             updateInfo();
             drawBoard(); 
@@ -565,6 +656,37 @@ SOFTWARE.
                 loadStateFromHistory(gameHistory[currentHistoryIndex]);
             }
         }
+
+        function showResetConfirmModal(onConfirm) {
+            const t = translations[currentLanguage];
+            resetConfirmMessage.textContent = t.confirmReset;
+            modalConfirmBtn.textContent = t.yes;
+            modalCancelBtn.textContent = t.no;
+            resetConfirmModal.classList.add('active');
+            confirmCallback = onConfirm;
+        }
+
+        function hideResetConfirmModal() {
+            resetConfirmModal.classList.remove('active');
+            confirmCallback = null;
+        }
+
+        modalConfirmBtn.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            hideResetConfirmModal();
+        });
+
+        modalCancelBtn.addEventListener('click', () => {
+            hideResetConfirmModal();
+        });
+
+        resetConfirmModal.addEventListener('click', (event) => {
+            if (event.target === resetConfirmModal) {
+                hideResetConfirmModal();
+            }
+        });
 
 
         function initBoard() {
@@ -637,7 +759,7 @@ SOFTWARE.
             ctx.fillStyle = '#e6bf83'; 
             ctx.fillRect(0, 0, canvas.width, canvas.height); 
 
-            const boundaryColor = '#ffffff88'; 
+            const boundaryColor = '#ffffffbb'; 
             const boundaryLineWidth = Math.max(1, Math.floor(cellSize / 18)); 
             const normalLineColor = '#333';
             const normalLineWidth = Math.max(1, Math.floor(cellSize / 25));
@@ -741,11 +863,6 @@ SOFTWARE.
             ctx.stroke();
         }
         
-        /**
-         * Processes a valid move, updates the board, handles captures, Ko, and switches player.
-         * @param {number} x - Logical X coordinate of the move.
-         * @param {number} y - Logical Y coordinate of the move.
-         */
         function processMove(x, y) { 
             const boardStateBeforePlayerPlacedStone = JSON.stringify(board); 
 
@@ -957,8 +1074,16 @@ SOFTWARE.
         }
 
         function resetBoard(newSize) { 
-            boardSize = newSize;
-            initBoard(); 
+            // Only show confirm modal if there are moves in history beyond the initial state
+            if (currentHistoryIndex > 0) { 
+                showResetConfirmModal(() => { 
+                    boardSize = newSize;
+                    initBoard(); 
+                });
+            } else { // If board is empty (or only initial state exists), reset directly
+                boardSize = newSize;
+                initBoard();
+            }
         };
         
         reset9x9Btn.onclick = () => resetBoard(9);
@@ -977,10 +1102,10 @@ SOFTWARE.
         canvas.addEventListener('keydown', (event) => {
             let scrolled = false; 
             switch (event.key) {
-                case 'ArrowUp': offsetY = (offsetY + 1 + boardSize) % boardSize; scrolled = true; break; 
-                case 'ArrowDown': offsetY = (offsetY - 1) % boardSize; scrolled = true; break; 
-                case 'ArrowLeft': offsetX = (offsetX + 1 + boardSize) % boardSize; scrolled = true; break; 
-                case 'ArrowRight': offsetX = (offsetX - 1) % boardSize; scrolled = true; break; 
+                case 'ArrowUp': offsetY = (offsetY - 1 + boardSize) % boardSize; scrolled = true; break; 
+                case 'ArrowDown': offsetY = (offsetY + 1) % boardSize; scrolled = true; break; 
+                case 'ArrowLeft': offsetX = (offsetX - 1 + boardSize) % boardSize; scrolled = true; break; 
+                case 'ArrowRight': offsetX = (offsetX + 1) % boardSize; scrolled = true; break; 
             }
             if (scrolled) {
                 event.preventDefault(); 
@@ -989,22 +1114,22 @@ SOFTWARE.
         });
 
         scrollUpBtn.addEventListener('click', () => { 
-            offsetY = (offsetY + 1 + boardSize) % boardSize; 
+            offsetY = (offsetY - 1 + boardSize) % boardSize; 
             drawBoard();
             canvas.focus(); 
         });
         scrollDownBtn.addEventListener('click', () => { 
-            offsetY = (offsetY - 1) % boardSize; 
+            offsetY = (offsetY + 1) % boardSize; 
             drawBoard();
             canvas.focus();
         });
         scrollLeftBtn.addEventListener('click', () => { 
-            offsetX = (offsetX + 1 + boardSize) % boardSize; 
+            offsetX = (offsetX - 1 + boardSize) % boardSize; 
             drawBoard();
             canvas.focus();
         });
         scrollRightBtn.addEventListener('click', () => { 
-            offsetX = (offsetX - 1) % boardSize; 
+            offsetX = (offsetX + 1) % boardSize; 
             drawBoard();
             canvas.focus();
         });
