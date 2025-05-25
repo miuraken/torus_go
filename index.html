@@ -25,7 +25,10 @@ SOFTWARE.
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>トーラス碁盤</title> <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>トーラス碁盤</title> 
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         /* General body styling */
         body {
@@ -40,7 +43,6 @@ SOFTWARE.
             padding: 10px;
             box-sizing: border-box;
             overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
-            /* overflow: hidden; /* Consider removing if zoom causes issues with body scroll */
         }
         /* Main container for the game */
         .game-container {
@@ -62,20 +64,25 @@ SOFTWARE.
             color: #374151; /* Tailwind gray-700 */
         }
 
-        /* Controls for language selection - Radio button style */
         .top-controls-wrapper {
             display: flex;
-            flex-direction: column; /* Stack language and history controls */
+            flex-direction: column; 
             align-items: center;
             width: 100%;
-            max-width: 500px; /* Adjust as needed */
+            max-width: 550px; /* Adjusted for new button */
             margin-bottom: 10px;
+        }
+        .main-controls-row { /* For lang and history/3D */
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            align-items: center;
+            margin-bottom: 8px;
         }
         .language-controls {
             display: flex;
             gap: 10px; 
             align-items: center;
-            margin-bottom: 8px; /* Space between lang and history controls */
         }
         .language-controls label {
             cursor: pointer;
@@ -89,11 +96,11 @@ SOFTWARE.
             cursor: pointer;
             margin-right: 3px;
         }
-        .history-controls {
-            display: flex;
-            gap: 8px; /* Gap between undo/redo buttons */
+        .action-controls { /* For history and 3D buttons */
+             display: flex;
+            gap: 8px;
         }
-        .history-controls button {
+        .action-controls button {
             padding: 6px 10px;
             font-size: 13px;
             border-radius: 6px;
@@ -103,17 +110,15 @@ SOFTWARE.
             color: #333;
             transition: background-color 0.3s, border-color 0.3s;
         }
-        .history-controls button:hover:not(:disabled) {
+        .action-controls button:hover:not(:disabled) {
             background-color: #e9e9e9;
             border-color: #bbb;
         }
-        .history-controls button:disabled {
+        .action-controls button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
-
-        /* Wrapper for the canvas and scroll buttons, using CSS Grid */
         .canvas-area-wrapper {
             display: grid;
             grid-template-columns: auto 1fr auto; 
@@ -125,8 +130,7 @@ SOFTWARE.
             margin-bottom: 10px; 
         }
 
-        /* Go board canvas styling */
-        canvas {
+        canvas#goBoard { /* Specific ID for 2D board */
             grid-column: 2 / 3; 
             grid-row: 2 / 3;    
             background-color: #e6bf83; 
@@ -137,7 +141,6 @@ SOFTWARE.
             touch-action: none; 
         }
 
-        /* General styling for scroll buttons */
         .scroll-button {
             font-size: 20px; 
             background-color: #dddddd; 
@@ -155,7 +158,6 @@ SOFTWARE.
             background-color: #cccccc; 
         }
 
-        /* Specific styling for horizontal (left/right) scroll buttons */
         #scrollLeftBtn, #scrollRightBtn {
             width: 30px;       
             min-width: 30px;   
@@ -167,7 +169,6 @@ SOFTWARE.
         #scrollLeftBtn  { grid-column: 1 / 2; grid-row: 2 / 3; align-self: stretch; } 
         #scrollRightBtn { grid-column: 3 / 4; grid-row: 2 / 3; align-self: stretch; } 
 
-        /* Specific styling for vertical (up/down) scroll buttons */
         #scrollUpBtn, #scrollDownBtn {
             width: 100%; 
             padding-top: 4px;    
@@ -180,7 +181,6 @@ SOFTWARE.
         #scrollUpBtn    { grid-column: 2 / 3; grid-row: 1 / 2; } 
         #scrollDownBtn  { grid-column: 2 / 3; grid-row: 3 / 4; } 
 
-        /* Controls for resetting the board (9x9, 13x13, 19x19) - Moved to bottom */
         .board-size-controls {
             margin-top: 15px; 
             display: flex;
@@ -206,8 +206,6 @@ SOFTWARE.
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
         }
 
-
-        /* Panel for displaying game information (current player, captures) */
         .info-panel {
             display: flex;
             justify-content: space-around;
@@ -223,7 +221,6 @@ SOFTWARE.
             color: #2d3748; 
         }
 
-        /* Area for displaying messages (errors, ko warnings) */
         .message-area {
             margin-top: 10px;
             height: 20px; 
@@ -233,7 +230,6 @@ SOFTWARE.
             text-align: center;
         }
 
-        /* Text for game instructions */
         .instructions {
             margin-top:10px;
             font-size: 12px;
@@ -252,7 +248,7 @@ SOFTWARE.
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1000; /* Ensure it's on top */
+            z-index: 1000; 
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -285,18 +281,48 @@ SOFTWARE.
             transition: background-color 0.2s;
         }
         #modalConfirmBtn {
-            background-color: #e53e3e; /* Red */
+            background-color: #e53e3e; 
             color: white;
         }
         #modalConfirmBtn:hover {
-            background-color: #c53030; /* Darker Red */
+            background-color: #c53030; 
         }
         #modalCancelBtn {
-            background-color: #cbd5e0; /* Gray */
+            background-color: #cbd5e0; 
             color: #2d3748;
         }
         #modalCancelBtn:hover {
-            background-color: #a0aec0; /* Darker Gray */
+            background-color: #a0aec0; 
+        }
+
+        /* 3D Modal Styles */
+        #torus3DModal .modal-content {
+            max-width: 90vw; 
+            width: auto;
+            height: 80vh; 
+            display: flex; 
+            flex-direction: column;
+        }
+        #torus3DCanvas {
+            width: 100%;
+            height: calc(100% - 40px); 
+            display: block;
+            border-radius: 6px;
+        }
+        #close3DModalBtn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 20px;
+            line-height: 30px;
+            text-align: center;
+            cursor: pointer;
         }
 
     </style>
@@ -305,15 +331,18 @@ SOFTWARE.
     <div class="game-container">
         <h1 id="mainTitle">トーラス碁盤</h1> 
         <div class="top-controls-wrapper">
-            <div class="language-controls">
-                <label><input type="radio" name="language" value="en" id="langRadioEn"> EN</label>
-                <label><input type="radio" name="language" value="jp" id="langRadioJp"> JP</label>
-                <label><input type="radio" name="language" value="cn" id="langRadioCn"> CN</label>
-                <label><input type="radio" name="language" value="kr" id="langRadioKr"> KR</label>
-            </div>
-            <div class="history-controls">
-                <button id="undoBtn">戻る</button>
-                <button id="redoBtn">進む</button>
+            <div class="main-controls-row">
+                <div class="language-controls">
+                    <label><input type="radio" name="language" value="en" id="langRadioEn"> EN</label>
+                    <label><input type="radio" name="language" value="jp" id="langRadioJp"> JP</label>
+                    <label><input type="radio" name="language" value="cn" id="langRadioCn"> CN</label>
+                    <label><input type="radio" name="language" value="kr" id="langRadioKr"> KR</label>
+                </div>
+                <div class="action-controls">
+                    <button id="undoBtn">戻る</button>
+                    <button id="redoBtn">進む</button>
+                    <button id="view3DBtn">3D</button> 
+                </div>
             </div>
         </div>
 
@@ -350,10 +379,18 @@ SOFTWARE.
         </div>
     </div>
 
+    <div id="torus3DModal" class="modal-overlay">
+        <div class="modal-content">
+            <button id="close3DModalBtn">&times;</button>
+            <canvas id="torus3DCanvas"></canvas>
+        </div>
+    </div>
+
+
     <script>
         // Get DOM elements
         const mainTitleElement = document.getElementById('mainTitle'); 
-        const canvas = document.getElementById('goBoard');
+        const canvas = document.getElementById('goBoard'); // 2D canvas
         const ctx = canvas.getContext('2d');
         const currentPlayerDisplay = document.getElementById('currentPlayer');
         const blackCapturedDisplay = document.getElementById('blackCaptured');
@@ -380,13 +417,19 @@ SOFTWARE.
 
         const undoBtn = document.getElementById('undoBtn');
         const redoBtn = document.getElementById('redoBtn');
+        const view3DBtn = document.getElementById('view3DBtn'); // 3D View Button
 
         // Modal elements
         const resetConfirmModal = document.getElementById('resetConfirmModal');
         const resetConfirmMessage = document.getElementById('resetConfirmMessage');
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
         const modalCancelBtn = document.getElementById('modalCancelBtn');
-        let confirmCallback = null; // To store the action to perform on confirm
+        let confirmCallback = null; 
+
+        // 3D Modal elements
+        const torus3DModal = document.getElementById('torus3DModal');
+        const torus3DCanvas = document.getElementById('torus3DCanvas');
+        const close3DModalBtn = document.getElementById('close3DModalBtn');
 
         // Game constants
         const EMPTY = 0; 
@@ -410,6 +453,15 @@ SOFTWARE.
         let touchStartX = 0;
         let touchStartY = 0;
         const tapThreshold = 10; 
+        let tapTimeout = null;
+
+        // Three.js variables
+        let scene3D, camera3D, renderer3D, orbitControls3D, torusMesh3D, gridLinesGroup3D, stoneMeshes3D = []; 
+        let targetTorusRotationX = 0;
+        let targetTorusRotationY = 0;
+        const rotationSpeed = 0.02;
+        let animationFrameId3D; 
+
 
         const translations = {
             en: {
@@ -430,6 +482,7 @@ SOFTWARE.
                 white: "White",
                 undo: "Undo",
                 redo: "Redo",
+                view3D: "3D View",
                 confirmReset: "Reset the current board?",
                 yes: "Yes",
                 no: "No",
@@ -452,6 +505,7 @@ SOFTWARE.
                 white: "白",
                 undo: "戻る",
                 redo: "進む",
+                view3D: "3D表示",
                 confirmReset: "現在の盤面をリセットしますか？",
                 yes: "はい",
                 no: "いいえ",
@@ -474,6 +528,7 @@ SOFTWARE.
                 white: "白棋",
                 undo: "悔棋", 
                 redo: "重做", 
+                view3D: "3D视图",
                 confirmReset: "要重置当前棋盘吗？",
                 yes: "是",
                 no: "否",
@@ -496,6 +551,7 @@ SOFTWARE.
                 white: "백",
                 undo: "무르기",
                 redo: "다시 실행",
+                view3D: "3D 보기",
                 confirmReset: "현재 바둑판을 초기화하시겠습니까?",
                 yes: "예",
                 no: "아니오",
@@ -550,6 +606,7 @@ SOFTWARE.
             instructionsTextElement.textContent = t.instructions;
             undoBtn.textContent = t.undo;
             redoBtn.textContent = t.redo;
+            view3DBtn.textContent = t.view3D;
 
             resetConfirmMessage.textContent = t.confirmReset;
             modalConfirmBtn.textContent = t.yes;
@@ -626,16 +683,23 @@ SOFTWARE.
             updateUndoRedoButtons();
         }
 
-        function loadStateFromHistory(state) {
+        function loadStateFromHistory(state, keepScroll = false) { 
             board = JSON.parse(JSON.stringify(state.board));
             currentPlayer = state.playerWhoseTurnItIs;
             capturedStones = JSON.parse(JSON.stringify(state.captured));
             koPosition = state.ko ? { ...state.ko } : null; 
+            
+            if (!keepScroll) { 
+            }
+
 
             updateInfo();
             drawBoard(); 
             clearMessage();
             updateUndoRedoButtons();
+            if (torus3DModal.classList.contains('active')) { 
+                setup3DTorusAndBoard();
+            }
         }
 
         function updateUndoRedoButtons() {
@@ -646,14 +710,14 @@ SOFTWARE.
         function undoMove() {
             if (currentHistoryIndex > 0) {
                 currentHistoryIndex--;
-                loadStateFromHistory(gameHistory[currentHistoryIndex]);
+                loadStateFromHistory(gameHistory[currentHistoryIndex], true); 
             }
         }
 
         function redoMove() {
             if (currentHistoryIndex < gameHistory.length - 1) {
                 currentHistoryIndex++;
-                loadStateFromHistory(gameHistory[currentHistoryIndex]);
+                loadStateFromHistory(gameHistory[currentHistoryIndex], true); 
             }
         }
 
@@ -670,24 +734,189 @@ SOFTWARE.
             resetConfirmModal.classList.remove('active');
             confirmCallback = null;
         }
-
-        modalConfirmBtn.addEventListener('click', () => {
-            if (confirmCallback) {
-                confirmCallback();
+                
+        // --- 3D Modal Functions ---
+        function open3DModal() {
+            torus3DModal.classList.add('active');
+            if (!renderer3D) { 
+                init3DScene();
             }
-            hideResetConfirmModal();
-        });
+            setup3DTorusAndBoard(); 
+            if(renderer3D && !animationFrameId3D) animate3D(); 
+            document.addEventListener('keydown', handle3DKeyDown); 
+        }
 
-        modalCancelBtn.addEventListener('click', () => {
-            hideResetConfirmModal();
-        });
-
-        resetConfirmModal.addEventListener('click', (event) => {
-            if (event.target === resetConfirmModal) {
-                hideResetConfirmModal();
+        function close3DModal() {
+            torus3DModal.classList.remove('active');
+            if (renderer3D && animationFrameId3D) { 
+                cancelAnimationFrame(animationFrameId3D);
+                animationFrameId3D = null;
             }
-        });
+            document.removeEventListener('keydown', handle3DKeyDown); 
+        }
+        
+        function init3DScene() {
+            scene3D = new THREE.Scene();
+            scene3D.background = new THREE.Color(0xf0f4f8); 
 
+            const aspectRatio = torus3DCanvas.clientWidth / torus3DCanvas.clientHeight;
+            camera3D = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+            camera3D.position.z = 15; 
+
+            renderer3D = new THREE.WebGLRenderer({ canvas: torus3DCanvas, antialias: true, alpha: true });
+            renderer3D.setSize(torus3DCanvas.clientWidth, torus3DCanvas.clientHeight);
+            renderer3D.setPixelRatio(window.devicePixelRatio);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); 
+            scene3D.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); 
+            directionalLight.position.set(5, 10, 7.5);
+            scene3D.add(directionalLight);
+
+            orbitControls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+            orbitControls3D.enableDamping = true;
+            orbitControls3D.dampingFactor = 0.05;
+            orbitControls3D.screenSpacePanning = false;
+            orbitControls3D.minDistance = 5;
+            orbitControls3D.maxDistance = 50;
+        }
+
+        function setup3DTorusAndBoard() {
+            if (!scene3D) return;
+
+            // Clear previous 3D objects
+            stoneMeshes3D.forEach(s => { if(s.parent) s.parent.remove(s); }); 
+            stoneMeshes3D = [];
+            if (gridLinesGroup3D && gridLinesGroup3D.parent) { 
+                 gridLinesGroup3D.parent.remove(gridLinesGroup3D);
+            }
+            gridLinesGroup3D = new THREE.Group(); 
+            if (torusMesh3D && torusMesh3D.parent) {
+                torusMesh3D.parent.remove(torusMesh3D);
+            }
+
+
+            const torusRadius = 5;
+            const tubeRadius = 2;
+            const radialSegments = 64; 
+            const tubularSegments = 48; 
+
+            const torusGeometry = new THREE.TorusGeometry(torusRadius, tubeRadius, radialSegments, tubularSegments);
+            const torusMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xe6bf83, 
+                transparent: true,
+                opacity: 0.6, // Adjusted membrane opacity
+                side: THREE.DoubleSide, 
+                roughness: 0.7,
+                metalness: 0.1
+            });
+            torusMesh3D = new THREE.Mesh(torusGeometry, torusMaterial);
+            scene3D.add(torusMesh3D); 
+            
+            const R = torusRadius;
+            const r_tube = tubeRadius;
+            
+            const lineMaterial = new THREE.MeshBasicMaterial({color: 0x66666644}); 
+            const lineTubeRadius = 0.025; // Slightly thicker lines
+
+            // Lines along parallels (rows)
+            for (let i = 0; i < boardSize; i++) { 
+                const vAngle = (i / boardSize) * Math.PI * 2;
+                const pathPoints = [];
+                for (let j = 0; j <= radialSegments; j++) { 
+                    const uAngle = (j / radialSegments) * Math.PI * 2;
+                    const x = (R + r_tube * Math.cos(vAngle)) * Math.cos(uAngle);
+                    const y = (R + r_tube * Math.cos(vAngle)) * Math.sin(uAngle);
+                    const z = r_tube * Math.sin(vAngle);
+                    pathPoints.push(new THREE.Vector3(x, y, z));
+                }
+                const path = new THREE.CatmullRomCurve3(pathPoints, false); // Use CatmullRomCurve3 for smooth path
+                const tubeGeom = new THREE.TubeGeometry(path, radialSegments, lineTubeRadius, 8, false); 
+                const lineMesh = new THREE.Mesh(tubeGeom, lineMaterial);
+                gridLinesGroup3D.add(lineMesh);
+            }
+
+            // Lines along meridians (columns)
+            for (let i = 0; i < boardSize; i++) { 
+                const uAngle = (i / boardSize) * Math.PI * 2;
+                const pathPoints = [];
+                for (let j = 0; j <= tubularSegments; j++) { 
+                    const vAngle = (j / tubularSegments) * Math.PI * 2;
+                    const x = (R + r_tube * Math.cos(vAngle)) * Math.cos(uAngle);
+                    const y = (R + r_tube * Math.cos(vAngle)) * Math.sin(uAngle);
+                    const z = r_tube * Math.sin(vAngle);
+                    pathPoints.push(new THREE.Vector3(x, y, z));
+                }
+                const path = new THREE.CatmullRomCurve3(pathPoints, false);
+                const tubeGeom = new THREE.TubeGeometry(path, tubularSegments, lineTubeRadius, 8, false); 
+                const lineMesh = new THREE.Mesh(tubeGeom, lineMaterial);
+                gridLinesGroup3D.add(lineMesh);
+            }
+            torusMesh3D.add(gridLinesGroup3D); 
+
+
+            targetTorusRotationX = torusMesh3D.rotation.x; 
+            targetTorusRotationY = torusMesh3D.rotation.y;
+
+            const tubeCellLength = (2 * Math.PI * tubeRadius) / boardSize;
+            const mainRingCellLength = (2 * Math.PI * torusRadius) / boardSize; 
+            const stoneRadius = Math.min(tubeCellLength, mainRingCellLength) * 0.4; // Adjusted stone radius
+
+
+            const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x1a202c, roughness: 0.4, metalness: 0.1 });
+            const whiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 });
+            const stoneGeometry = new THREE.SphereGeometry(stoneRadius, 16, 16);
+
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (board[r][c] !== EMPTY) {
+                        // Calculate u, v for the intersection point
+                        const u = (c / boardSize) * Math.PI * 2; 
+                        const v = (r / boardSize) * Math.PI * 2; 
+
+                        const stone = new THREE.Mesh(stoneGeometry, board[r][c] === BLACK ? blackMaterial : whiteMaterial);
+                        
+                        // Position the stone directly on the surface of the torus at the intersection
+                        stone.position.x = (R + r_tube * Math.cos(v)) * Math.cos(u);
+                        stone.position.y = (R + r_tube * Math.cos(v)) * Math.sin(u);
+                        stone.position.z = r_tube * Math.sin(v);
+                        
+                        torusMesh3D.add(stone); 
+                        stoneMeshes3D.push(stone);
+                    }
+                }
+            }
+            targetTorusRotationY = -(offsetX / boardSize) * Math.PI * 2; 
+            targetTorusRotationX = -(offsetY / boardSize) * Math.PI * 2; 
+        }
+        
+        function animate3D() {
+            animationFrameId3D = requestAnimationFrame(animate3D);
+            if (orbitControls3D) orbitControls3D.update(); 
+
+            if (torusMesh3D) {
+                torusMesh3D.rotation.y += (targetTorusRotationY - torusMesh3D.rotation.y) * 0.1;
+                torusMesh3D.rotation.x += (targetTorusRotationX - torusMesh3D.rotation.x) * 0.1;
+            }
+
+            if(renderer3D && scene3D && camera3D) renderer3D.render(scene3D, camera3D);
+        }
+
+        function handle3DKeyDown(event) {
+            if (!torus3DModal.classList.contains('active')) return;
+            let scrolled3D = false;
+            const scrollAmount3D = (Math.PI * 2) / boardSize / 2; 
+
+            switch (event.key) {
+                case 'ArrowUp': targetTorusRotationX += scrollAmount3D; scrolled3D = true; break;
+                case 'ArrowDown': targetTorusRotationX -= scrollAmount3D; scrolled3D = true; break;
+                case 'ArrowLeft': targetTorusRotationY += scrollAmount3D; scrolled3D = true; break;
+                case 'ArrowRight': targetTorusRotationY -= scrollAmount3D; scrolled3D = true; break;
+            }
+            if (scrolled3D) {
+                event.preventDefault();
+            }
+        }
 
         function initBoard() {
             const wrapperDim = getAvailableGridDimension(); 
@@ -764,7 +993,6 @@ SOFTWARE.
             const normalLineColor = '#333';
             const normalLineWidth = Math.max(1, Math.floor(cellSize / 25));
 
-            // Draw normal grid lines first
             ctx.strokeStyle = normalLineColor;
             ctx.lineWidth = normalLineWidth;
             for (let i = 0; i < boardSize; i++) { 
@@ -781,15 +1009,13 @@ SOFTWARE.
                 ctx.stroke();
             }
 
-            // Draw boundary "seam" lines using the user-provided logic
             ctx.strokeStyle = boundaryColor;
             ctx.lineWidth = boundaryLineWidth;
 
-            // Check if the vertical seam is visible
-            for (let screenCol = 0; screenCol < boardSize; screenCol++) {
-                const logicalCol = (screenCol + offsetX + boardSize) % boardSize;
-                if (logicalCol === (boardSize - 1)) {
-                    const seamXPos = cellSize / 2 + screenCol * cellSize + cellSize / 2; 
+            for (let screenIndex = 0; screenIndex < boardSize; screenIndex++) {
+                const logicalCol = (screenIndex + offsetX + boardSize) % boardSize;
+                if (logicalCol === (boardSize - 1)) { 
+                    const seamXPos = cellSize / 2 + screenIndex * cellSize + cellSize / 2; 
                     if (seamXPos > 0 && seamXPos < canvas.width) { 
                         ctx.beginPath();
                         ctx.moveTo(seamXPos, 0); 
@@ -797,13 +1023,10 @@ SOFTWARE.
                         ctx.stroke();
                     }
                 }
-            }
             
-            // Check if the horizontal seam is visible
-            for (let screenRow = 0; screenRow < boardSize; screenRow++) {
-                const logicalRow = (screenRow + offsetY + boardSize) % boardSize;
+                const logicalRow = (screenIndex + offsetY + boardSize) % boardSize;
                 if (logicalRow === (boardSize - 1)) {
-                    const seamYPos = cellSize / 2 + screenRow * cellSize + cellSize / 2; 
+                    const seamYPos = cellSize / 2 + screenIndex * cellSize + cellSize / 2; 
                      if (seamYPos > 0 && seamYPos < canvas.height) { 
                         ctx.beginPath();
                         ctx.moveTo(0, seamYPos); 
@@ -812,7 +1035,6 @@ SOFTWARE.
                     }
                 }
             }
-
 
             const starPointSize = Math.max(1, cellSize / 12); 
             const starPoints = getStarPoints(boardSize); 
@@ -974,7 +1196,6 @@ SOFTWARE.
                 return false;
             }
 
-            // Check against Ko restriction set by the opponent's previous move
             if (koPosition && koPosition.x === x && koPosition.y === y) {
                 showMessage("errorKo"); 
                 return false;
@@ -1074,13 +1295,12 @@ SOFTWARE.
         }
 
         function resetBoard(newSize) { 
-            // Only show confirm modal if there are moves in history beyond the initial state
             if (currentHistoryIndex > 0) { 
                 showResetConfirmModal(() => { 
                     boardSize = newSize;
                     initBoard(); 
                 });
-            } else { // If board is empty (or only initial state exists), reset directly
+            } else { 
                 boardSize = newSize;
                 initBoard();
             }
@@ -1098,6 +1318,32 @@ SOFTWARE.
 
         undoBtn.onclick = undoMove;
         redoBtn.onclick = redoMove;
+        view3DBtn.onclick = open3DModal; 
+
+        modalConfirmBtn.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            hideResetConfirmModal();
+        });
+
+        modalCancelBtn.addEventListener('click', () => {
+            hideResetConfirmModal();
+        });
+
+        resetConfirmModal.addEventListener('click', (event) => {
+            if (event.target === resetConfirmModal) {
+                hideResetConfirmModal();
+            }
+        });
+
+        close3DModalBtn.addEventListener('click', close3DModal);
+        torus3DModal.addEventListener('click', (event) => {
+            if (event.target === torus3DModal) {
+                close3DModal();
+            }
+        });
+
 
         canvas.addEventListener('keydown', (event) => {
             let scrolled = false; 
@@ -1136,7 +1382,7 @@ SOFTWARE.
 
         canvas.addEventListener('click', handleInteraction); 
 
-        let tapTimeout = null; 
+        // tapTimeout is declared globally now
         canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) { 
                 touchStartX = e.touches[0].clientX; 
@@ -1164,7 +1410,16 @@ SOFTWARE.
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout); 
-            resizeTimeout = setTimeout(initBoard, 250); 
+            resizeTimeout = setTimeout(() => {
+                initBoard(); 
+                if (torus3DModal.classList.contains('active') && renderer3D) { 
+                    const modalContent = torus3DCanvas.parentElement;
+                    renderer3D.setSize(modalContent.clientWidth, modalContent.clientHeight - 40); 
+                    camera3D.aspect = torus3DCanvas.clientWidth / torus3DCanvas.clientHeight;
+                    camera3D.updateProjectionMatrix();
+                    setup3DTorusAndBoard(); 
+                }
+            }, 250); 
         });
         
         loadLanguagePreference(); 
